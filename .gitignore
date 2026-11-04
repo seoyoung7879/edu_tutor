@@ -218,3 +218,21 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- 가상환경 / 비밀값 ---
+.venv/
+venv/
+env/
+.env
+.streamlit/secrets.toml
+
+# --- 이 프로젝트 전용 ---
+data/raw/
+data/processed/
+models/*.pt
+models/*.pth
+mlruns/
+*.parquet
+*.faiss
+.vector_store/
+.DS_Store
