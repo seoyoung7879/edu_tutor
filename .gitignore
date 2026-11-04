@@ -224,6 +224,7 @@ __marimo__/
 venv/
 env/
 .env
+
 .streamlit/secrets.toml
 
 # --- 이 프로젝트 전용 ---
