@@ -1,6 +1,7 @@
 # 문제 풀이, 채점, AI 설명, 문제 추천을 한 화면에 묶은 데모 앱
 import requests
 import streamlit as st
+import re
 
 st.set_page_config(page_title="edu_tutor", layout="wide")
 API = st.sidebar.text_input("API 주소", "http://127.0.0.1:8000")
@@ -12,7 +13,9 @@ for k, v in {"history": [], "q": None, "result": None, "explain": None, "rec": N
 def norm(s):
     return "".join(str(s).replace("$", "").split()).lower()
 
-
+def fix_math(text):
+    return re.sub(r"\$\$(.+?)\$\$", r"$\1$", text or "")
+# $$…$$를 줄 안에서 렌더링되는 $…$로 바꿔 수식이 깔끔하게 보이게
 def load_question(qid):
     ss.q = requests.get(f"{API}/explain/{qid}", timeout=10).json()
     ss.result = ss.explain = ss.rec = None
@@ -42,7 +45,17 @@ except requests.RequestException as e:
 q = ss.q
 if q:
     st.subheader(f"문항 {q['qid']}")
-    st.markdown(q["content"])
+    # 문제를 한국어로 번역해 보여 주고, 중국어 원문은 접어 둡니다.
+    if "ko" not in q:
+        with st.spinner("한국어로 번역하는 중..."):
+            try:
+                r = requests.get(f"{API}/tutor/translate/{q['qid']}", timeout=120)
+                q["ko"] = r.json().get("korean")
+            except requests.RequestException:
+                q["ko"] = None
+    st.markdown(fix_math(q["ko"] or "(번역 실패 — 아래 원문을 확인하세요)"))
+    with st.expander("중국어 원문 보기"):
+        st.markdown(fix_math(q["content"]))
     if q.get("options"):
         st.write(q["options"])
     ans = st.text_input("정답을 입력하세요", key=f"ans_{q['qid']}")
@@ -68,7 +81,7 @@ if q:
 
     if ss.explain:
         st.markdown("### AI 설명")
-        st.write(ss.explain)
+        st.markdown(fix_math(ss.explain))
 
     if ss.rec:
         st.markdown("### 추천 문제")

@@ -117,3 +117,15 @@ def random_question():
         if qid in qmap:
             return {"qid": qid}
     raise HTTPException(404, "문항을 찾지 못했습니다.")
+
+#문항 번호를 주면 문제 본문의 한국어 번역을 돌려주는 API
+
+@app.get("/tutor/translate/{qid}")
+def tutor_translate(qid: int):
+    ref = rag.get_explanation(qid)
+    if ref is None:
+        raise HTTPException(404, "없는 문항입니다.")
+    try:
+        return {"qid": qid, "korean": llm.translate(ref["content"])}
+    except Exception as e:
+        raise HTTPException(503, f"LLM 호출 실패: {e}")

@@ -40,3 +40,40 @@ def explain(qid, student_question=None):
         max_tokens=600,
     )
     return resp.choices[0].message.content
+
+# 중국어 문제 본문을 한국어로 번역하고, 같은 문장은 다시 번역하지 않도록 기억
+TRANS_MODEL = os.getenv("TRANS_MODEL", "gemma3:4b")
+TRANS_SYSTEM = (
+    "너는 중국어를 한국어로 옮기는 수학 문제 번역가다. 초등 수학 문제를 자연스러운 한국어로 번역하라. "
+    "숫자와 수식은 그대로 두고, 문제를 풀거나 설명을 덧붙이지 말고 한국어 번역문만 출력하라. "
+    "중국어 글자를 남기지 마라."
+)
+_trans_cache = {}
+
+
+def _han_ratio(s):
+    letters = [c for c in s if c.isalpha()]
+    if not letters:
+        return 0.0
+    return sum("\u4e00" <= c <= "\u9fff" for c in letters) / len(letters)
+
+
+def translate(text):
+    if text in _trans_cache:
+        return _trans_cache[text]
+    out = ""
+    for _ in range(2):
+        resp = client.chat.completions.create(
+            model=TRANS_MODEL,
+            messages=[
+                {"role": "system", "content": TRANS_SYSTEM},
+                {"role": "user", "content": "다음 중국어 문제를 한국어로 번역하세요. 번역문만 출력하세요.\n\n" + text},
+            ],
+            temperature=0,
+            max_tokens=400,
+        )
+        out = resp.choices[0].message.content.strip()
+        if _han_ratio(out) < 0.1:
+            _trans_cache[text] = out
+            return out
+    return out
