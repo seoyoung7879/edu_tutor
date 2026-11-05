@@ -43,37 +43,49 @@ def explain(qid, student_question=None):
 
 # 중국어 문제 본문을 한국어로 번역하고, 같은 문장은 다시 번역하지 않도록 기억
 TRANS_MODEL = os.getenv("TRANS_MODEL", "gemma3:4b")
-TRANS_SYSTEM = (
-    "너는 중국어를 한국어로 옮기는 수학 문제 번역가다. 초등 수학 문제를 자연스러운 한국어로 번역하라. "
-    "숫자와 수식은 그대로 두고, 문제를 풀거나 설명을 덧붙이지 말고 한국어 번역문만 출력하라. "
-    "중국어 글자를 남기지 마라."
-)
+
 _trans_cache = {}
+TRANS_SYSTEM = (
+    "너는 중국어 초등 수학 문제를 한국어로 옮기는 번역가다. 규칙을 반드시 지켜라. "
+    "1) 한국어 번역문만 출력한다. 중국어 글자(한자)를 하나도 남기지 않는다. "
+    "2) 숫자와 $$ 수식은 그대로 둔다. "
+    "3) 문제를 풀거나 설명을 덧붙이지 않는다. "
+    "4) 원문은 빈칸이 지워져 있다. '…有种方法', '…做对了题'처럼 수량이 빠진 문장은 "
+    "단정문이 아니라 '몇 개(몇 가지)인지 구하시오' 형태의 질문으로 번역한다. "
+    "5) 不做或做错=풀지 않았거나 틀린 경우, 倒扣=감점, 小红=샤오훙, 艾迪=에디."
+)
 
 
-def _han_ratio(s):
-    letters = [c for c in s if c.isalpha()]
-    if not letters:
-        return 0.0
-    return sum("\u4e00" <= c <= "\u9fff" for c in letters) / len(letters)
+def _tr_user(t):
+    return "다음 중국어 문제를 한국어로 번역하세요. 번역문만 출력하세요.\n\n" + t
+
+
+_FEWSHOT = [
+    {"role": "user", "content": _tr_user("将$$8$$拆成$$3$$个互不相同的自然数的和，共有种不同的方法．")},
+    {"role": "assistant", "content": "$$8$$을 서로 다른 자연수 $$3$$개의 합으로 나타내는 방법은 모두 몇 가지인지 구하시오."},
+    {"role": "user", "content": _tr_user("某次数学竞赛共$$15$$道题，每做对一题得$$8$$分，不做或做错一题倒扣$$5$$分，小红得了$$81$$分，小红做对了题．")},
+    {"role": "assistant", "content": "어느 수학 경시대회에 문제가 모두 $$15$$개 있었다. 한 문제를 맞힐 때마다 $$8$$점을 얻고, 풀지 않았거나 틀리면 한 문제마다 $$5$$점을 깎는다. 샤오훙이 $$81$$점을 얻었다면 맞힌 문제는 몇 개인지 구하시오."},
+]
+
+
+def _has_han(s):
+    return any("\u4e00" <= c <= "\u9fff" for c in s)
 
 
 def translate(text):
     if text in _trans_cache:
         return _trans_cache[text]
     out = ""
-    for _ in range(2):
+    for temp in (0, 0.3, 0.3):
         resp = client.chat.completions.create(
             model=TRANS_MODEL,
-            messages=[
-                {"role": "system", "content": TRANS_SYSTEM},
-                {"role": "user", "content": "다음 중국어 문제를 한국어로 번역하세요. 번역문만 출력하세요.\n\n" + text},
-            ],
-            temperature=0,
+            messages=[{"role": "system", "content": TRANS_SYSTEM}, *_FEWSHOT,
+                      {"role": "user", "content": _tr_user(text)}],
+            temperature=temp,
             max_tokens=400,
         )
         out = resp.choices[0].message.content.strip()
-        if _han_ratio(out) < 0.1:
+        if not _has_han(out):
             _trans_cache[text] = out
             return out
     return out

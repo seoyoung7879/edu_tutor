@@ -1,21 +1,39 @@
 # 문제 풀이, 채점, AI 설명, 문제 추천을 한 화면에 묶은 데모 앱
+import re
+
 import requests
 import streamlit as st
-import re
 
 st.set_page_config(page_title="edu_tutor", layout="wide")
 API = st.sidebar.text_input("API 주소", "http://127.0.0.1:8000")
 ss = st.session_state
-for k, v in {"history": [], "q": None, "result": None, "explain": None, "rec": None}.items():
+for k, v in {"history": [], "q": None, "result": None, "explain": None, "rec": None, "trans": {}}.items():
     ss.setdefault(k, v)
 
 
 def norm(s):
     return "".join(str(s).replace("$", "").split()).lower()
 
+
 def fix_math(text):
     return re.sub(r"\$\$(.+?)\$\$", r"$\1$", text or "")
-# $$…$$를 줄 안에서 렌더링되는 $…$로 바꿔 수식이 깔끔하게 보이게
+
+
+def ko_text(qid, fallback):
+    qid = int(qid)
+    if qid in ss.trans:
+        return ss.trans[qid]
+    try:
+        r = requests.get(f"{API}/tutor/translate/{qid}", timeout=180)
+        if r.ok and r.json().get("korean"):
+            ss.trans[qid] = r.json()["korean"]
+            return ss.trans[qid]
+        st.warning(f"문항 {qid} 번역 실패: {r.status_code} {r.text[:200]}")
+    except requests.RequestException as e:
+        st.warning(f"문항 {qid} 번역 요청 오류: {e}")
+    return fallback
+
+
 def load_question(qid):
     ss.q = requests.get(f"{API}/explain/{qid}", timeout=10).json()
     ss.result = ss.explain = ss.rec = None
@@ -45,19 +63,14 @@ except requests.RequestException as e:
 q = ss.q
 if q:
     st.subheader(f"문항 {q['qid']}")
-    # 문제를 한국어로 번역해 보여 주고, 중국어 원문은 접어 둡니다.
-    if "ko" not in q:
-        with st.spinner("한국어로 번역하는 중..."):
-            try:
-                r = requests.get(f"{API}/tutor/translate/{q['qid']}", timeout=120)
-                q["ko"] = r.json().get("korean")
-            except requests.RequestException:
-                q["ko"] = None
-    st.markdown(fix_math(q["ko"] or "(번역 실패 — 아래 원문을 확인하세요)"))
+    with st.spinner("한국어로 번역하는 중..."):
+        ko = ko_text(q["qid"], "(번역 실패 — 아래 원문을 확인하세요)")
+    st.markdown(fix_math(ko))
     with st.expander("중국어 원문 보기"):
         st.markdown(fix_math(q["content"]))
     if q.get("options"):
         st.write(q["options"])
+
     ans = st.text_input("정답을 입력하세요", key=f"ans_{q['qid']}")
     if st.button("제출") and ans.strip():
         correct = norm(ans) in [norm(a) for a in q["answer"]]
@@ -86,9 +99,11 @@ if q:
     if ss.rec:
         st.markdown("### 추천 문제")
         if "recommended" in ss.rec:
+            with st.spinner("추천 문제를 번역하는 중..."):
+                texts = {i["qid"]: ko_text(i["qid"], i["content"]) for i in ss.rec["recommended"]}
             for item in ss.rec["recommended"]:
                 st.markdown(f"**문항 {item['qid']}** (예상 정답 확률 {item['p_correct']:.0%})")
-                st.markdown(item["content"])
+                st.markdown(fix_math(texts[item["qid"]]))
                 st.button("이 문제 풀기", key=f"go_{item['qid']}",
                           on_click=load_question, args=(item["qid"],))
         else:
