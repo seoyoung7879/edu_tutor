@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from src.model import DKT
 from src import rag
+from src import llm
 
 ROOT = Path(__file__).resolve().parent.parent
 MAXLEN = 200
@@ -92,3 +93,18 @@ def recommend(req: RecommendRequest):
     res = predict(PredictRequest(history=req.history, candidates=list(cands)))
     ranked = sorted(res["predictions"], key=lambda x: abs(x["p_correct"] - 0.6))
     return {"recommended": [{**r, "content": cands[r["qid"]]} for r in ranked[: req.k]]}
+#문항 번호(와 선택적 질문)를 받아 LLM의 한국어 설명을 돌려주는 API
+class ExplainRequest(BaseModel):
+    qid: int
+    question: str | None = None
+
+
+@app.post("/tutor/explain")
+def tutor_explain(req: ExplainRequest):
+    try:
+        text = llm.explain(req.qid, req.question)
+    except Exception as e:
+        raise HTTPException(503, f"LLM 호출 실패: {e}")
+    if text is None:
+        raise HTTPException(404, "없는 문항입니다.")
+    return {"qid": req.qid, "explanation": text}
