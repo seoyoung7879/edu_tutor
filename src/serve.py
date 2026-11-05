@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from src.model import DKT
+from src import rag
 
 ROOT = Path(__file__).resolve().parent.parent
 MAXLEN = 200
@@ -53,3 +54,41 @@ def predict(req: PredictRequest):
 
     preds = [{"qid": c, "p_correct": round(float(probs[qmap[c]]), 4)} for c in req.candidates]
     return {"predictions": preds, "latency_ms": round((time.perf_counter() - t0) * 1000, 2)}
+@app.get("/explain/{qid}")
+def explain(qid: int):
+    r = rag.get_explanation(qid)
+    if r is None:
+        raise HTTPException(404, "없는 문항입니다.")
+    return r
+
+
+@app.get("/similar/{qid}")
+def similar(qid: int, k: int = 3):
+    r = rag.similar(qid, k)
+    if r is None:
+        raise HTTPException(404, "검색 대상이 아닌 문항입니다(이미지 문항 등).")
+    return {"qid": qid, "similar": r}
+
+# 틀린 문제와 비슷한 후보를 모아 DKT 정답 확률로 골라 주는 추천 API
+class RecommendRequest(BaseModel):
+    history: list[Interaction]
+    k: int = 3
+
+
+@app.post("/recommend")
+def recommend(req: RecommendRequest):
+    wrong = [x.qid for x in req.history if x.response == 0][-5:]
+    if not wrong:
+        raise HTTPException(400, "틀린 문제가 없어 추천 기준이 없습니다.")
+    done = {x.qid for x in req.history}
+    cands = {}
+    for w in wrong:
+        for s in rag.similar(w, 10) or []:
+            c = int(s["qid"])
+            if c in qmap and c not in done:
+                cands[c] = s["content"]
+    if not cands:
+        raise HTTPException(404, "추천 후보가 없습니다.")
+    res = predict(PredictRequest(history=req.history, candidates=list(cands)))
+    ranked = sorted(res["predictions"], key=lambda x: abs(x["p_correct"] - 0.6))
+    return {"recommended": [{**r, "content": cands[r["qid"]]} for r in ranked[: req.k]]}
