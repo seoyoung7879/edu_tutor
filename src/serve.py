@@ -108,3 +108,12 @@ def tutor_explain(req: ExplainRequest):
     if text is None:
         raise HTTPException(404, "없는 문항입니다.")
     return {"qid": req.qid, "explanation": text}
+
+# 이미지 없는 문항 중 모델이 아는 문항 하나를 무작위로 돌려주는 API
+@app.get("/random")
+def random_question():
+    for _ in range(100):
+        qid = int(rag.random_id())
+        if qid in qmap:
+            return {"qid": qid}
+    raise HTTPException(404, "문항을 찾지 못했습니다.")

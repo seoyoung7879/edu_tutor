@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 import numpy as np
+import random
 
 ROOT = Path(__file__).resolve().parent.parent
 _q = json.load(open(ROOT / "data/raw/metadata/questions.json", encoding="utf-8"))
@@ -15,13 +16,19 @@ def _key(qid):
     v = _q[qid]
     return (v["content"].strip(), v["analysis"].strip())
 
-
+# 해설 조회에 문제 유형과 보기를 포함하고, 랜덤 문항을 고르는 함수를 추가
 def get_explanation(qid):
     v = _q.get(str(qid))
     if v is None:
         return None
-    return {"qid": str(qid), "content": v["content"], "answer": v["answer"], "analysis": v["analysis"]}
+    return {
+        "qid": str(qid), "content": v["content"], "answer": v["answer"],
+        "analysis": v["analysis"], "type": v.get("type"), "options": v.get("options"),
+    }
 
+
+def random_id():
+    return random.choice(_ids_all)
 
 def similar(qid, k=3):
     qid = str(qid)
