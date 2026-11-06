@@ -11,6 +11,8 @@ from pydantic import BaseModel, Field
 from src.model import DKT
 from src import rag
 from src import llm
+from src import agent
+import random
 
 ROOT = Path(__file__).resolve().parent.parent
 MAXLEN = 200
@@ -127,5 +129,74 @@ def tutor_translate(qid: int):
         raise HTTPException(404, "없는 문항입니다.")
     try:
         return {"qid": qid, "korean": llm.translate(ref["content"])}
+    except Exception as e:
+        raise HTTPException(503, f"LLM 호출 실패: {e}")
+
+# 학생의 말과 풀이 기록을 받아 에이전트를 실행하고, 답과 호출한 도구 목록을 돌려주는 API
+class ChatRequest(BaseModel):
+    message: str
+    history: list[Interaction] = []
+    current_qid: int | None = None
+
+
+def _make_tools(history, current_qid):
+    def explain_question(qid=None):
+        qid = qid or current_qid
+        if qid is None:
+            return {"error": "문항 번호가 없습니다."}
+        return {"explanation": llm.explain(int(qid))}
+
+    def recommend_questions(k=3):
+        r = recommend(RecommendRequest(history=history, k=int(k)))
+        items, lines = [], []
+        for i in r["recommended"]:
+            ref = rag.get_explanation(i["qid"])
+            ko = llm.translate(ref["content"])
+            items.append({"qid": i["qid"], "p_correct": i["p_correct"], "question_ko": ko})
+            lines.append(f"- 문항 {i['qid']} (예상 정답 확률 {i['p_correct']:.0%}): {ko}")
+        return {"items": items, "summary_ko": "\n".join(lines)}
+
+    def estimate_ability():
+        if not history:
+            return {"error": "풀이 기록이 없습니다."}
+        acc = sum(x.response for x in history) / len(history)
+        cands = random.sample(list(qmap), 30)
+        res = predict(PredictRequest(history=history, candidates=cands))
+        mean_p = sum(p["p_correct"] for p in res["predictions"]) / len(res["predictions"])
+        return {
+            "n_solved": len(history),
+            "accuracy": round(acc, 3),
+            "expected_correct_rate": round(mean_p, 3),
+            "summary_ko": (
+                f"지금까지 {len(history)}문제를 풀었고 정답률은 {acc:.0%}입니다. "
+                f"모델이 예측한 무작위 문제의 예상 정답률은 {mean_p:.0%}입니다."
+            ),
+        }
+
+    return {"explain_question": explain_question,
+            "recommend_questions": recommend_questions,
+            "estimate_ability": estimate_ability}
+
+
+@app.post("/tutor/chat")
+def tutor_chat(req: ChatRequest):
+    ctx = f"(현재 학생이 보고 있는 문항 번호: {req.current_qid}, 지금까지 푼 문제 수: {len(req.history)})"
+    try:
+        answer, used = agent.run(req.message, _make_tools(req.history, req.current_qid), ctx)
+    except Exception as e:
+        raise HTTPException(503, f"에이전트 실행 실패: {e}")
+    return {"answer": answer, "tools_used": used}
+
+# 문항의 보기를 한국어로 번역해 돌려주는 API
+@app.get("/tutor/translate_options/{qid}")
+def tutor_translate_options(qid: int):
+    ref = rag.get_explanation(qid)
+    if ref is None:
+        raise HTTPException(404, "없는 문항입니다.")
+    opts = ref.get("options")
+    if not isinstance(opts, dict) or not opts:
+        return {"qid": qid, "options": None}
+    try:
+        return {"qid": qid, "options": {k: llm.translate_option(str(v)) for k, v in opts.items()}}
     except Exception as e:
         raise HTTPException(503, f"LLM 호출 실패: {e}")

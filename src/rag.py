@@ -28,6 +28,10 @@ def get_explanation(qid):
 
 
 def random_id():
+    for _ in range(100):
+        qid = random.choice(_ids_all)
+        if "□" not in _q[qid]["content"]:
+            return qid
     return random.choice(_ids_all)
 
 def similar(qid, k=3):
@@ -38,6 +42,8 @@ def similar(qid, k=3):
     me, seen, out = _key(qid), set(), []
     for i in np.argsort(-scores):
         cand = _ids_all[i]
+        if "□" in _q[cand]["content"]:
+            continue
         key = _key(cand)
         #점수가 0.98 이상인 결과는 같은 문제로 보고 건너뛰기
         if cand == qid or key == me or key in seen or scores[i] >= 0.98:

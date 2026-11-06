@@ -13,10 +13,35 @@ for k, v in {"history": [], "q": None, "result": None, "explain": None, "rec": N
 
 def norm(s):
     return "".join(str(s).replace("$", "").split()).lower()
+# 입력을 쉼표·공백·、 기준으로 나눠 칸별로 비교하고, 칸이 하나뿐이면 전체 문자열 비교도 허용
+def split_ans(s):
+    return [norm(x) for x in re.split(r"[,，、;；\s]+", s.strip()) if x]
+
+
+def is_correct(ans, answers):
+    answers_n = [norm(a) for a in answers]
+    if len(answers_n) > 1:
+        return split_ans(ans) == answers_n
+    return norm(ans) in answers_n or split_ans(ans) == answers_n
+
+
+_SYM = {"div": "÷", "times": "×", "cdot": "·", "leq": "≤", "le": "≤",
+        "geq": "≥", "ge": "≥", "neq": "≠", "ne": "≠"}
 
 
 def fix_math(text):
-    return re.sub(r"\$\$(.+?)\$\$", r"$\1$", text or "")
+    t = (text or "").replace("$$", "$")
+    t = re.sub(r"\\\((.+?)\\\)", r"$\1$", t, flags=re.S)
+    t = re.sub(r"\\\[(.+?)\\\]", r"$\1$", t, flags=re.S)
+    t = re.sub(r"\\(div|times|cdot|leq|geq|neq|le|ge|ne)(?![a-zA-Z])",
+               lambda m: _SYM[m.group(1)], t)
+    parts = t.split("$")
+    if len(parts) % 2 == 1:
+        pat = r"\\(?:frac(?:\{[^{}]*\}){2}|sqrt\{[^{}]*\})"
+        for i in range(0, len(parts), 2):
+            parts[i] = re.sub(pat, lambda m: "$" + m.group(0) + "$", parts[i])
+        t = "$".join(parts)
+    return t
 
 
 def ko_text(qid, fallback):
@@ -68,12 +93,31 @@ if q:
     st.markdown(fix_math(ko))
     with st.expander("중국어 원문 보기"):
         st.markdown(fix_math(q["content"]))
+    ans = None
     if q.get("options"):
-        st.write(q["options"])
+        okey = f"optko_{q['qid']}"
+        if okey not in ss:
+            try:
+                r = requests.get(f"{API}/tutor/translate_options/{q['qid']}", timeout=120)
+                ss[okey] = r.json().get("options") or q["options"]
+            except requests.RequestException:
+                ss[okey] = q["options"]
+        opts_ko = ss[okey]
+        ans = st.radio(
+            "보기를 고르세요", list(q["options"].keys()), index=None, key=f"radio_{q['qid']}",
+            format_func=lambda k: f"{k}. {fix_math(str(opts_ko.get(k, q['options'][k])))}",
+        )
+    else:
+        if len(q["answer"]) > 1:
+            st.caption(f"정답이 {len(q['answer'])}개 입니다. 쉼표로 구분해 순서대로 입력하세요.")
+        ans = st.text_input("정답을 입력하세요", key=f"ans_{q['qid']}")
 
-    ans = st.text_input("정답을 입력하세요", key=f"ans_{q['qid']}")
-    if st.button("제출") and ans.strip():
-        correct = norm(ans) in [norm(a) for a in q["answer"]]
+    if st.button("제출") and ans and str(ans).strip():
+        if q.get("options"):
+            chosen = [str(ans), str(q["options"][str(ans)])]
+            correct = any(is_correct(c, q["answer"]) for c in chosen)
+        else:
+            correct = is_correct(str(ans), q["answer"])
         ss.history.append({"qid": int(q["qid"]), "response": int(correct)})
         ss.result = correct
         ss.explain = ss.rec = None
@@ -108,4 +152,32 @@ if q:
                           on_click=load_question, args=(item["qid"],))
         else:
             st.info(ss.rec.get("detail", "추천 결과가 없습니다."))
+# 풀이 기록과 현재 문항을 에이전트 API에 보내고, 답변과 사용한 도구를 대화 형태로 보여 주는 UI
+st.divider()
+st.markdown("### 튜터와 대화하기")
+ss.setdefault("chat", [])
+for m in ss.chat:
+    with st.chat_message(m["role"]):
+        st.markdown(fix_math(m["content"]))
+        if m.get("tools"):
+            st.caption("사용한 도구: " + ", ".join(m["tools"]))
+
+if prompt := st.chat_input("튜터에게 물어보세요 (예: 내 실력이 어때?)"):
+    ss.chat.append({"role": "user", "content": prompt})
+    with st.spinner("튜터가 생각하는 중..."):
+        try:
+            r = requests.post(
+                f"{API}/tutor/chat",
+                json={"message": prompt, "history": ss.history,
+                      "current_qid": int(ss.q["qid"]) if ss.q else None},
+                timeout=300,
+            )
+            data = r.json()
+            ans = data.get("answer") or str(data)
+            tools = [t["tool"] for t in data.get("tools_used", [])]
+        except requests.RequestException as e:
+            ans, tools = f"요청 오류: {e}", []
+    ss.chat.append({"role": "assistant", "content": ans, "tools": tools})
+    st.rerun()
+#api: .\.venv-kt\Scripts\python.exe -m uvicorn src.serve:app --reload
 #실행: .\.venv-kt\Scripts\python.exe -m streamlit run app\streamlit_app.py

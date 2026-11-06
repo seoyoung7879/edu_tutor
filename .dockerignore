@@ -1,0 +1,7 @@
+*
+!src
+!models
+!requirements_serve.txt
+!data/raw/metadata/questions.json
+!data/processed/rag_emb.npy
+!data/processed/rag_ids.json
