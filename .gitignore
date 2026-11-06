@@ -228,10 +228,13 @@ env/
 .streamlit/secrets.toml
 
 # --- 이 프로젝트 전용 ---
-data/raw/
-data/processed/
-models/*.pt
-models/*.pth
+data/raw/*
+!data/raw/metadata/
+data/raw/metadata/*
+!data/raw/metadata/questions.json
+data/processed/*
+!data/processed/rag_emb.npy
+!data/processed/rag_ids.json
 mlruns/
 *.parquet
 *.faiss

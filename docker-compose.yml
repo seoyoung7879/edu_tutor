@@ -1,0 +1,10 @@
+services:
+  api:
+    build: .
+    image: edu-tutor-api
+    ports:
+      - "8000:8000"
+    environment:
+      LLM_BASE_URL: http://host.docker.internal:11434/v1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
