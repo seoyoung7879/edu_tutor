@@ -6,8 +6,12 @@ from sentence_transformers import SentenceTransformer
 from src import rag
 from src.eval_rag import evaluate
 
-model = SentenceTransformer("intfloat/multilingual-e5-small", device="cuda")
+import torch
 
+model = SentenceTransformer(
+    "intfloat/multilingual-e5-small",
+    device="cuda" if torch.cuda.is_available() else "cpu",
+)
 
 def encode(textfn, prefix):
     texts = [prefix + textfn(rag._q[q]) for q in rag._ids_all]
@@ -50,3 +54,9 @@ if __name__ == "__main__":
     for name, emb in variants.items():
         for d in (None, 3):
             print(name, "| 깊이", d or "전체", evaluate(make_search(emb), depth=d))
+#| 방식                 | hit@1 (전체/3단계) | hit@5 (전체/3단계) | precision@5 (전체/3단계) |
+#| ------------------ | -------------- | -------------- | -------------------- |
+#| 현재 rag_emb.npy     | 0.560 / 0.773  | 0.760 / 0.893  | 0.373 / 0.675        |
+#| A 본문만              | 0.540 / 0.760  | 0.723 / 0.893  | 0.357 / 0.656        |
+#| C 해설만              | 0.517 / 0.757  | 0.710 / 0.853  | 0.331 / 0.622        |
+#| D 본문+해설, query 접두어 | 0.577 / 0.793  | 0.757 / 0.900  | 0.377 / 0.686        |

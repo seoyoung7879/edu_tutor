@@ -13,6 +13,12 @@ from src import rag
 from src import llm
 from src import agent
 import random
+from src import search as search_mod
+
+
+@app.get("/search")
+def search_questions(q: str, k: int = 5):
+    return search_mod.search(q, k)
 
 ROOT = Path(__file__).resolve().parent.parent
 MAXLEN = 200

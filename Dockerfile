@@ -3,6 +3,7 @@ WORKDIR /app
 COPY requirements_serve.txt .
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir -r requirements_serve.txt
+RUN python -c "from sentence_transformers import SentenceTransformer as S; S('intfloat/multilingual-e5-small')"
 COPY src ./src
 COPY models ./models
 COPY data ./data
