@@ -241,3 +241,4 @@ mlruns/
 .vector_store/
 .DS_Store
 data/*.db
+!data/processed/ko_cache.json

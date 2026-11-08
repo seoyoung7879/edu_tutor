@@ -5,3 +5,4 @@
 !data/raw/metadata/questions.json
 !data/processed/rag_emb.npy
 !data/processed/rag_ids.json
+!data/processed/ko_cache.json
