@@ -14,11 +14,10 @@ from src import llm
 from src import agent
 import random
 from src import search as search_mod
+from src import store
 
 
-@app.get("/search")
-def search_questions(q: str, k: int = 5):
-    return search_mod.search(q, k)
+
 
 ROOT = Path(__file__).resolve().parent.parent
 MAXLEN = 200
@@ -40,6 +39,11 @@ class PredictRequest(BaseModel):
     history: list[Interaction]
     candidates: list[int]
 
+class ChatRequest(BaseModel):
+    message: str
+    history: list[Interaction] = []
+    current_qid: int | None = None
+    student_id: str | None = None
 
 @app.get("/health")
 def health():
@@ -181,14 +185,18 @@ def _make_tools(history, current_qid):
 
     return {"explain_question": explain_question,
             "recommend_questions": recommend_questions,
-            "estimate_ability": estimate_ability}
+            "estimate_ability": estimate_ability,
+            "search_questions": search_mod.search_for_agent}
 
 
 @app.post("/tutor/chat")
 def tutor_chat(req: ChatRequest):
-    ctx = f"(현재 학생이 보고 있는 문항 번호: {req.current_qid}, 지금까지 푼 문제 수: {len(req.history)})"
+    history = req.history
+    if not history and req.student_id:
+        history = [Interaction(**x) for x in store.get_history(req.student_id)]
+    ctx = f"(현재 학생이 보고 있는 문항 번호: {req.current_qid}, 지금까지 푼 문제 수: {len(history)})"
     try:
-        answer, used = agent.run(req.message, _make_tools(req.history, req.current_qid), ctx)
+        answer, used = agent.run(req.message, _make_tools(history, req.current_qid), ctx)
     except Exception as e:
         raise HTTPException(503, f"에이전트 실행 실패: {e}")
     return {"answer": answer, "tools_used": used}
@@ -206,3 +214,27 @@ def tutor_translate_options(qid: int):
         return {"qid": qid, "options": {k: llm.translate_option(str(v)) for k, v in opts.items()}}
     except Exception as e:
         raise HTTPException(503, f"LLM 호출 실패: {e}")
+@app.get("/search")
+def search_questions(q: str, k: int = 5):
+    return search_mod.search(q, k)
+
+@app.get("/search_concept")
+def search_concept_api(q: str, k: int = 3):
+    return search_mod.search_concept(q, k)
+
+class AnswerRequest(BaseModel):
+    qid: int
+    response: int = Field(ge=0, le=1)
+
+
+@app.post("/students/{student_id}/answers")
+def save_answer(student_id: str, req: AnswerRequest):
+    if req.qid not in qmap:
+        raise HTTPException(400, "알 수 없는 문항 ID입니다.")
+    store.add_answer(student_id, req.qid, req.response)
+    return {"saved": True, "n_solved": len(store.get_history(student_id))}
+
+
+@app.get("/students/{student_id}/history")
+def student_history(student_id: str):
+    return {"student_id": student_id, "history": store.get_history(student_id)}

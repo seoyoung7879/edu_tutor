@@ -180,4 +180,5 @@ if prompt := st.chat_input("튜터에게 물어보세요 (예: 내 실력이 어
     ss.chat.append({"role": "assistant", "content": ans, "tools": tools})
     st.rerun()
 #api: .\.venv-kt\Scripts\python.exe -m uvicorn src.serve:app --reload
+# http://127.0.0.1:8000/docs
 #실행: .\.venv-kt\Scripts\python.exe -m streamlit run app\streamlit_app.py

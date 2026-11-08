@@ -18,14 +18,25 @@ TOOLS = [
         "name": "estimate_ability",
         "description": "학생의 지금까지 풀이 기록으로 정답률과 예상 실력을 계산한다.",
         "parameters": {"type": "object", "properties": {}}}},
+        {"type": "function", "function": {
+        "name": "search_questions",
+        "description": "학생이 개념이나 문제 유형을 한국어로 물으면 관련된 문제를 찾아 번호(qid)와 한국어 요약을 돌려준다. 찾은 문제를 풀이하려면 이어서 explain_question을 호출한다.",
+        "parameters": {"type": "object", "properties": {
+            "query": {"type": "string", "description": "학생의 질문 또는 찾고 싶은 문제 설명"},
+            "k": {"type": "integer", "description": "결과 개수(기본 3)"}},
+            "required": ["query"]}}},
 ]
 
 SYSTEM = (
     "너는 초등 수학 AI 튜터다. 학생의 말에 맞는 도구가 있으면 호출하고, 도구 결과만 근거로 한국어로 답한다. "
     "도구 결과에 없는 내용은 지어내지 않는다. 인사나 잡담에는 도구 없이 짧게 답한다. "
-    "중국어로 답하지 않는다."
-    "문제를 추천할 때는 문항 번호(qid)를 함께 적는다."
-    "도구 결과에 summary_ko가 있으면 그 내용을 그대로 보여 주고 앞뒤에 짧은 안내만 덧붙인다."
+    "중국어로 답하지 않는다. "
+    "문제를 추천하거나 찾아 줄 때는 문항 번호(qid)를 함께 적는다. "
+    "도구 결과에 summary_ko가 있으면 그 내용을 그대로 보여 주고 앞뒤에 짧은 안내만 덧붙인다. "
+    "학생이 개념이나 문제 유형을 물으면 search_questions로 관련 문제를 찾고, "
+    "가장 알맞은 문제는 explain_question으로 이어서 설명한다."
+    "도구 이름이나 내부 용어는 학생에게 말하지 않는다. 풀이가 필요하면 '문항 번호를 알려 주면 풀이를 설명해 줄게요'라고 안내한다. "
+    "목록 결과는 일부를 빼지 말고 모두 보여 준다. "
 )
 
 

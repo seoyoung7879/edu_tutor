@@ -240,3 +240,4 @@ mlruns/
 *.faiss
 .vector_store/
 .DS_Store
+data/*.db
