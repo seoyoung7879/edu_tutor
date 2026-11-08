@@ -10,6 +10,7 @@ client = OpenAI(
     base_url=os.getenv("LLM_BASE_URL", "http://127.0.0.1:11434/v1"),
     api_key=os.getenv("LLM_API_KEY", "ollama"),
     timeout=180,
+    max_retries=4,
 )
 MODEL = os.getenv("LLM_MODEL", "qwen2.5:7b")
 
@@ -52,6 +53,13 @@ def explain(qid, student_question=None):
 TRANS_MODEL = os.getenv("TRANS_MODEL", "gemma3:4b")
 
 _trans_cache = {}
+import json
+from pathlib import Path
+
+_KO = Path(__file__).resolve().parents[1] / "data" / "processed" / "ko_cache.json"
+if _KO.exists():
+    _trans_cache.update(json.loads(_KO.read_text(encoding="utf-8")))
+    
 TRANS_SYSTEM = (
     "너는 중국어 초등 수학 문제를 한국어로 옮기는 번역가다. 규칙을 반드시 지켜라. "
     "1) 한국어 번역문만 출력한다. 중국어 글자(한자)를 하나도 남기지 않는다. "

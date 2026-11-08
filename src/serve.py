@@ -142,12 +142,6 @@ def tutor_translate(qid: int):
     except Exception as e:
         raise HTTPException(503, f"LLM 호출 실패: {e}")
 
-# 학생의 말과 풀이 기록을 받아 에이전트를 실행하고, 답과 호출한 도구 목록을 돌려주는 API
-class ChatRequest(BaseModel):
-    message: str
-    history: list[Interaction] = []
-    current_qid: int | None = None
-
 
 def _make_tools(history, current_qid):
     def explain_question(qid=None):
