@@ -4,3 +4,4 @@ openai
 numpy
 pydantic
 sentence-transformers
+boto3

@@ -25,3 +25,8 @@ def get_history(student_id, limit=200):
             "select qid, response from answers where student_id=? "
             "order by ts desc limit ?", (student_id, limit)).fetchall()
     return [{"qid": q, "response": r} for q, r in reversed(rows)]
+
+import os
+
+if os.getenv("STORE_BACKEND") == "dynamo":
+    from src.store_dynamo import add_answer, get_history  # noqa: F811
