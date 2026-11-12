@@ -244,3 +244,4 @@ data/*.db
 !data/processed/ko_cache.json
 .pem
 edu-tutor-key.pem
+*.zip
