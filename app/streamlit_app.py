@@ -1,11 +1,13 @@
 # 문제 풀이, 채점, AI 설명, 문제 추천을 한 화면에 묶은 데모 앱
+import os
 import re
 
 import requests
 import streamlit as st
 
 st.set_page_config(page_title="edu_tutor", layout="wide")
-API = st.sidebar.text_input("API 주소", "http://127.0.0.1:8000")
+API = st.sidebar.text_input("API 주소", os.getenv("API_URL", "http://127.0.0.1:8000"))
+SID = st.sidebar.text_input("학생 ID", "aws1")
 ss = st.session_state
 for k, v in {"history": [], "q": None, "result": None, "explain": None, "rec": None, "trans": {}}.items():
     ss.setdefault(k, v)
@@ -119,6 +121,11 @@ if q:
         else:
             correct = is_correct(str(ans), q["answer"])
         ss.history.append({"qid": int(q["qid"]), "response": int(correct)})
+        try:
+            requests.post(f"{API}/students/{SID}/answers",
+                          json={"qid": int(q["qid"]), "response": int(correct)}, timeout=10)
+        except requests.RequestException:
+            pass
         ss.result = correct
         ss.explain = ss.rec = None
 
